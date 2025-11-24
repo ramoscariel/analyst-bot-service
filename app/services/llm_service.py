@@ -6,7 +6,8 @@ Generates SQL queries and analysis from natural language prompts.
 import json
 import logging
 from typing import Optional
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from app.core.config import settings
 from app.models.llm_models import (
@@ -82,24 +83,33 @@ Respond with ONLY the JSON object, no additional text."""
         self.api_key = api_key or settings.gemini_api_key
         self.model_name = model_name or settings.gemini_model
 
-        # Configure Gemini API
-        genai.configure(api_key=self.api_key)
+        # Initialize Gemini client with API key
+        self.client = genai.Client(api_key=self.api_key)
 
-        # Initialize model with configuration
-        self.model = genai.GenerativeModel(
-            model_name=self.model_name,
-            generation_config={
-                "temperature": 0.2,  # More deterministic
-                "top_p": 0.95,
-                "top_k": 40,
-                "max_output_tokens": 2048,
-            },
-            safety_settings={
-                "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
-                "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
-                "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
-                "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
-            }
+        # Configure generation settings
+        self.generation_config = types.GenerateContentConfig(
+            temperature=0.2,  # More deterministic
+            top_p=0.95,
+            top_k=40,
+            max_output_tokens=2048,
+            safety_settings=[
+                types.SafetySetting(
+                    category='HARM_CATEGORY_HARASSMENT',
+                    threshold='BLOCK_NONE'
+                ),
+                types.SafetySetting(
+                    category='HARM_CATEGORY_HATE_SPEECH',
+                    threshold='BLOCK_NONE'
+                ),
+                types.SafetySetting(
+                    category='HARM_CATEGORY_SEXUALLY_EXPLICIT',
+                    threshold='BLOCK_NONE'
+                ),
+                types.SafetySetting(
+                    category='HARM_CATEGORY_DANGEROUS_CONTENT',
+                    threshold='BLOCK_NONE'
+                ),
+            ]
         )
 
         logger.info(f"LLM service initialized with model: {self.model_name}")
@@ -202,16 +212,16 @@ Respond with ONLY the JSON object, no additional text."""
             try:
                 logger.debug(f"Calling Gemini API (attempt {retry_count + 1}/{max_retries + 1})...")
 
-                # Generate content
-                response = self.model.generate_content(prompt)
+                # Generate content using client.models.generate_content
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=self.generation_config
+                )
 
-                # Check if response was blocked
+                # Check if response has text
                 if not response.text:
-                    if response.prompt_feedback:
-                        logger.error(f"Prompt blocked: {response.prompt_feedback}")
-                        raise LLMAPIError(
-                            f"Prompt was blocked by safety filters: {response.prompt_feedback}"
-                        )
+                    logger.error(f"Empty response from Gemini API")
                     raise LLMAPIError("Empty response from Gemini API")
 
                 logger.debug(f"Received response from Gemini ({len(response.text)} chars)")
@@ -290,7 +300,10 @@ Respond with ONLY the JSON object, no additional text."""
         """
         try:
             test_prompt = "Respond with only the number 1"
-            response = self.model.generate_content(test_prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=test_prompt
+            )
             logger.info("Gemini API connection test successful")
             return True
         except Exception as e:
