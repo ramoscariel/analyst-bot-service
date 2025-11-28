@@ -56,9 +56,15 @@ async def analyze_data(
     ```json
     {
       "prompt": "¿Cuál es el producto más vendido de la semana?",
-      "exclude_tables": null
+      "exclude_tables": null,
+      "generate_charts": null
     }
     ```
+
+    **Parameters:**
+    - `prompt`: Your question in Spanish
+    - `exclude_tables`: Optional list of tables to exclude from analysis
+    - `generate_charts`: Optional (null=auto, true=always, false=never)
 
     **Example Response:**
     ```json
@@ -81,7 +87,8 @@ async def analyze_data(
         # Perform analysis
         result = await analysis_service.analyze(
             user_prompt=request.prompt,
-            exclude_tables=request.exclude_tables
+            exclude_tables=request.exclude_tables,
+            generate_charts=request.generate_charts
         )
 
         logger.info("Analysis completed successfully")

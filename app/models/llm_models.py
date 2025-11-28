@@ -92,17 +92,15 @@ class LLMAnalysisResponse(BaseModel):
     )
 
     explanation: str = Field(
-        ...,
-        min_length=20,
+        default="",
         max_length=2000,
-        description="Clear explanation of the analysis in Spanish"
+        description="Clear explanation of the analysis results in Spanish"
     )
 
     chart_configs: List[ChartConfig] = Field(
-        ...,
-        min_length=0,
+        default_factory=list,
         max_length=3,
-        description="List of chart configurations (max 3 charts)"
+        description="List of chart configurations (max 3 charts, empty list if no charts needed)"
     )
 
     @field_validator('sql_query')

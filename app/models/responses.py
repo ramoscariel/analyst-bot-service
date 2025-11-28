@@ -47,7 +47,7 @@ class AnalysisResponse(BaseModel):
 
     explanation: str = Field(
         ...,
-        description="Analysis explanation in Spanish"
+        description="Explanation of query results in Spanish, describing the actual data returned"
     )
 
     sql_query: str = Field(

@@ -27,22 +27,22 @@ class LLMService:
     Generates structured analysis responses from natural language prompts.
     """
 
-    SYSTEM_PROMPT_TEMPLATE = """You are an expert SQL analyst for a business database. Given a database schema and a user question in Spanish, you must:
+    SYSTEM_PROMPT_WITH_CHARTS = """You are an expert SQL analyst for a business database. Given a database schema and a user question in Spanish, you must:
 
 1. Write a SQL Server query to answer the question
-2. Provide a clear explanation in Spanish
+2. Leave explanation empty (will be generated after query execution)
 3. Suggest appropriate chart visualizations
 
 Respond ONLY with valid JSON matching this exact structure:
 {{
-  "sql_query": "SELECT TOP 10 product_name, SUM(quantity) as total_sales FROM Sales JOIN Products ON Sales.product_id = Products.product_id GROUP BY product_name ORDER BY total_sales DESC",
-  "explanation": "Los productos más vendidos de la semana son Widget A con 125 unidades, seguido por Gadget B con 98 unidades.",
+  "sql_query": "SELECT TOP 10 p.Name as ProductName, SUM(s.Quantity) as TotalSales FROM Sales s JOIN Products p ON s.ProductId = p.Id GROUP BY p.Name ORDER BY TotalSales DESC",
+  "explanation": "",
   "chart_configs": [
     {{
       "type": "bar",
       "title": "Top 10 Productos Más Vendidos",
-      "x_column": "product_name",
-      "y_column": "total_sales",
+      "x_column": "ProductName",
+      "y_column": "TotalSales",
       "x_label": "Producto",
       "y_label": "Ventas Totales",
       "color_palette": "viridis"
@@ -50,10 +50,19 @@ Respond ONLY with valid JSON matching this exact structure:
   ]
 }}
 
-CRITICAL RULES:
+CRITICAL SQL RULES:
 - Use SQL Server syntax (TOP instead of LIMIT, GETDATE() instead of NOW())
 - Always include column aliases for aggregates (e.g., SUM(quantity) as total_sales)
+- **GROUP BY RULE**: When using aggregate functions (SUM, COUNT, AVG, MAX, MIN), ALL non-aggregated columns in SELECT must be in GROUP BY
+  * CORRECT: SELECT ProductName, SUM(Quantity) as total FROM Sales GROUP BY ProductName
+  * WRONG: SELECT ProductName, CategoryName, SUM(Quantity) as total FROM Sales GROUP BY ProductName
+  * CORRECT: SELECT ProductName, CategoryName, SUM(Quantity) as total FROM Sales GROUP BY ProductName, CategoryName
+- Entity Framework databases use PascalCase column names (e.g., ProductId, CategoryName, CreatedDate)
+- When joining tables, always use aliases to avoid ambiguous column references
+  * Example: SELECT p.Name, SUM(s.Quantity) as total FROM Sales s JOIN Products p ON s.ProductId = p.ProductId GROUP BY p.Name
 - Explanation must be in Spanish, clear and concise
+
+CHART RULES:
 - Maximum 3 charts per analysis
 - Choose chart types appropriate for the data:
   * bar: categorical comparisons (products, categories, regions)
@@ -63,7 +72,99 @@ CRITICAL RULES:
   * heatmap: matrix data (region x month, product x category)
 - For pie charts, y_column is not needed
 - Use descriptive Spanish titles for charts
-- Ensure column names in chart_configs match the SELECT query aliases
+- Ensure column names in chart_configs match the SELECT query aliases EXACTLY
+
+Database Schema:
+{schema}
+
+User Question: {prompt}
+
+Respond with ONLY the JSON object, no additional text."""
+
+    SYSTEM_PROMPT_WITHOUT_CHARTS = """You are an expert SQL analyst for a business database. Given a database schema and a user question in Spanish, you must:
+
+1. Write a SQL Server query to answer the question
+2. Leave explanation empty (will be generated after query execution)
+3. Do NOT generate any chart visualizations
+
+Respond ONLY with valid JSON matching this exact structure:
+{{
+  "sql_query": "SELECT TOP 10 p.Name as ProductName, SUM(s.Quantity) as TotalSales FROM Sales s JOIN Products p ON s.ProductId = p.Id GROUP BY p.Name ORDER BY TotalSales DESC",
+  "explanation": "",
+  "chart_configs": []
+}}
+
+CRITICAL SQL RULES:
+- Use SQL Server syntax (TOP instead of LIMIT, GETDATE() instead of NOW())
+- Always include column aliases for aggregates (e.g., SUM(quantity) as total_sales)
+- **GROUP BY RULE**: When using aggregate functions (SUM, COUNT, AVG, MAX, MIN), ALL non-aggregated columns in SELECT must be in GROUP BY
+  * CORRECT: SELECT ProductName, SUM(Quantity) as total FROM Sales GROUP BY ProductName
+  * WRONG: SELECT ProductName, CategoryName, SUM(Quantity) as total FROM Sales GROUP BY ProductName
+  * CORRECT: SELECT ProductName, CategoryName, SUM(Quantity) as total FROM Sales GROUP BY ProductName, CategoryName
+- Entity Framework databases use PascalCase column names (e.g., ProductId, CategoryName, CreatedDate)
+- When joining tables, always use aliases to avoid ambiguous column references
+  * Example: SELECT p.Name, SUM(s.Quantity) as total FROM Sales s JOIN Products p ON s.ProductId = p.ProductId GROUP BY p.Name
+- Explanation must be in Spanish, clear and concise
+- Do NOT include any charts - the chart_configs array must be empty: []
+- Focus on providing a detailed textual explanation since no visualizations will be provided
+
+Database Schema:
+{schema}
+
+User Question: {prompt}
+
+Respond with ONLY the JSON object, no additional text."""
+
+    SYSTEM_PROMPT_AUTO_CHARTS = """You are an expert SQL analyst for a business database. Given a database schema and a user question in Spanish, you must:
+
+1. Write a SQL Server query to answer the question
+2. Leave explanation empty (will be generated after query execution)
+3. Decide whether chart visualizations would be helpful for understanding the data
+4. Only suggest charts if they add significant value to the analysis
+
+Respond ONLY with valid JSON matching this exact structure:
+{{
+  "sql_query": "SELECT TOP 10 p.Name as ProductName, SUM(s.Quantity) as TotalSales FROM Sales s JOIN Products p ON s.ProductId = p.Id GROUP BY p.Name ORDER BY TotalSales DESC",
+  "explanation": "",
+  "chart_configs": [
+    {{
+      "type": "bar",
+      "title": "Top 10 Productos Más Vendidos",
+      "x_column": "ProductName",
+      "y_column": "TotalSales",
+      "x_label": "Producto",
+      "y_label": "Ventas Totales",
+      "color_palette": "viridis"
+    }}
+  ]
+}}
+
+CRITICAL SQL RULES:
+- Use SQL Server syntax (TOP instead of LIMIT, GETDATE() instead of NOW())
+- Always include column aliases for aggregates (e.g., SUM(quantity) as total_sales)
+- **GROUP BY RULE**: When using aggregate functions (SUM, COUNT, AVG, MAX, MIN), ALL non-aggregated columns in SELECT must be in GROUP BY
+  * CORRECT: SELECT ProductName, SUM(Quantity) as total FROM Sales GROUP BY ProductName
+  * WRONG: SELECT ProductName, CategoryName, SUM(Quantity) as total FROM Sales GROUP BY ProductName
+  * CORRECT: SELECT ProductName, CategoryName, SUM(Quantity) as total FROM Sales GROUP BY ProductName, CategoryName
+- Entity Framework databases use PascalCase column names (e.g., ProductId, CategoryName, CreatedDate)
+- When joining tables, always use aliases to avoid ambiguous column references
+  * Example: SELECT p.Name, SUM(s.Quantity) as total FROM Sales s JOIN Products p ON s.ProductId = p.ProductId GROUP BY p.Name
+- Explanation must be in Spanish, clear and concise
+
+CHART RULES:
+- Only suggest charts when they genuinely help understand the data:
+  * YES: Comparisons, trends, distributions, correlations
+  * NO: Simple counts, single values, yes/no answers, basic lookups
+- Maximum 3 charts per analysis (or use empty array [] if charts aren't needed)
+- Choose chart types appropriate for the data:
+  * bar: categorical comparisons (products, categories, regions)
+  * line: trends over time (daily/monthly sales, growth)
+  * pie: proportions/percentages (market share, distribution)
+  * scatter: correlation between two numeric variables
+  * heatmap: matrix data (region x month, product x category)
+- For pie charts, y_column is not needed
+- Use descriptive Spanish titles for charts
+- Ensure column names in chart_configs match the SELECT query aliases EXACTLY
 
 Database Schema:
 {schema}
@@ -118,7 +219,8 @@ Respond with ONLY the JSON object, no additional text."""
         self,
         user_prompt: str,
         database_schema: str,
-        additional_context: Optional[str] = None
+        additional_context: Optional[str] = None,
+        generate_charts: Optional[bool] = None
     ) -> LLMAnalysisResponse:
         """
         Generate SQL query and analysis from natural language prompt.
@@ -127,6 +229,7 @@ Respond with ONLY the JSON object, no additional text."""
             user_prompt: User's question in Spanish
             database_schema: Formatted database schema
             additional_context: Optional additional context
+            generate_charts: Whether to generate charts (None=auto, True=always, False=never)
 
         Returns:
             Structured LLM response with query, explanation, and chart configs
@@ -145,9 +248,12 @@ Respond with ONLY the JSON object, no additional text."""
             )
 
             # Generate prompt
-            prompt = self._build_prompt(context)
+            prompt = self._build_prompt(context, generate_charts)
 
-            logger.info(f"Generating analysis for prompt: {user_prompt[:100]}...")
+            logger.info(
+                f"Generating analysis for prompt: {user_prompt[:100]}... "
+                f"(charts: {generate_charts})"
+            )
 
             # Call Gemini API
             response = await self._call_gemini_api(prompt)
@@ -172,17 +278,30 @@ Respond with ONLY the JSON object, no additional text."""
             logger.error(f"Unexpected error in generate_analysis: {e}")
             raise LLMAPIError(f"Failed to generate analysis: {e}")
 
-    def _build_prompt(self, context: LLMPromptContext) -> str:
+    def _build_prompt(
+        self,
+        context: LLMPromptContext,
+        generate_charts: Optional[bool] = None
+    ) -> str:
         """
         Build complete prompt for Gemini.
 
         Args:
             context: Prompt context with schema and user question
+            generate_charts: Whether to generate charts (None=auto, True=always, False=never)
 
         Returns:
             Formatted prompt string
         """
-        prompt = self.SYSTEM_PROMPT_TEMPLATE.format(
+        # Select appropriate template based on chart generation preference
+        if generate_charts is True:
+            template = self.SYSTEM_PROMPT_WITH_CHARTS
+        elif generate_charts is False:
+            template = self.SYSTEM_PROMPT_WITHOUT_CHARTS
+        else:  # None - let LLM decide
+            template = self.SYSTEM_PROMPT_AUTO_CHARTS
+
+        prompt = template.format(
             schema=context.database_schema,
             prompt=context.user_prompt
         )
@@ -290,6 +409,68 @@ Respond with ONLY the JSON object, no additional text."""
         except Exception as e:
             logger.error(f"Unexpected error parsing response: {e}")
             raise LLMParseError(f"Failed to parse response: {e}")
+
+    async def generate_explanation_from_results(
+        self,
+        user_prompt: str,
+        sql_query: str,
+        query_results: list
+    ) -> str:
+        """
+        Generate explanation based on actual query results.
+
+        Args:
+            user_prompt: Original user question in Spanish
+            sql_query: The executed SQL query
+            query_results: List of result rows (dicts)
+
+        Returns:
+            Explanation text in Spanish describing the results
+
+        Raises:
+            LLMAPIError: If API call fails
+        """
+        try:
+            # Limit results to first 50 rows for context (to avoid token limits)
+            results_sample = query_results[:50]
+
+            # Build prompt for explanation generation
+            explanation_prompt = f"""You are an expert data analyst. Given a user's question, the SQL query that was executed, and the actual results, provide a clear, concise explanation in Spanish that describes the RESULTS.
+
+User Question: {user_prompt}
+
+SQL Query Executed:
+{sql_query}
+
+Query Results (first 50 rows):
+{json.dumps(results_sample, indent=2, ensure_ascii=False)}
+
+Total Rows Returned: {len(query_results)}
+
+Provide a clear explanation in Spanish (2-5 sentences) that:
+1. Directly answers the user's question based on the results
+2. Highlights key findings and patterns in the data
+3. Uses specific numbers and values from the results
+4. Is written in a professional but accessible tone
+
+Respond with ONLY the explanation text in Spanish, no JSON or additional formatting."""
+
+            logger.info(f"Generating explanation from {len(query_results)} result rows...")
+
+            # Call Gemini API
+            response = await self._call_gemini_api(explanation_prompt)
+
+            # Clean and return explanation
+            explanation = response.strip()
+
+            logger.info(f"Generated explanation: {explanation[:100]}...")
+
+            return explanation
+
+        except Exception as e:
+            logger.error(f"Failed to generate explanation from results: {e}")
+            # Return a basic fallback explanation
+            return f"Se ejecutó la consulta exitosamente y se obtuvieron {len(query_results)} resultados."
 
     def test_connection(self) -> bool:
         """

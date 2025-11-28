@@ -24,6 +24,16 @@ class AnalysisRequest(BaseModel):
         description="Optional list of table names to exclude from analysis"
     )
 
+    generate_charts: Optional[bool] = Field(
+        None,
+        description=(
+            "Whether to generate charts. "
+            "If None (default), the LLM decides based on necessity. "
+            "If True, always generate charts. "
+            "If False, never generate charts."
+        )
+    )
+
     @field_validator('prompt')
     @classmethod
     def validate_prompt(cls, v: str) -> str:
@@ -43,15 +53,23 @@ class AnalysisRequest(BaseModel):
             "examples": [
                 {
                     "prompt": "¿Cuál es el producto más vendido de la semana?",
-                    "exclude_tables": None
+                    "exclude_tables": None,
+                    "generate_charts": None
                 },
                 {
                     "prompt": "¿Cuáles son las ventas totales por categoría este mes?",
-                    "exclude_tables": ["SensitiveData", "InternalLogs"]
+                    "exclude_tables": ["SensitiveData", "InternalLogs"],
+                    "generate_charts": True
                 },
                 {
                     "prompt": "Muéstrame la tendencia de ventas en los últimos 30 días",
-                    "exclude_tables": None
+                    "exclude_tables": None,
+                    "generate_charts": None
+                },
+                {
+                    "prompt": "Dame el total de ventas del año",
+                    "exclude_tables": None,
+                    "generate_charts": False
                 }
             ]
         }

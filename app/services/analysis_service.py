@@ -61,7 +61,8 @@ class AnalysisService:
     async def analyze(
         self,
         user_prompt: str,
-        exclude_tables: List[str] = None
+        exclude_tables: List[str] = None,
+        generate_charts: bool = None
     ) -> Dict[str, Any]:
         """
         Perform complete analysis workflow.
@@ -69,6 +70,7 @@ class AnalysisService:
         Args:
             user_prompt: User's question in Spanish
             exclude_tables: Tables to exclude from schema (optional)
+            generate_charts: Whether to generate charts (None=auto, True=always, False=never)
 
         Returns:
             Dictionary with:
@@ -99,7 +101,8 @@ class AnalysisService:
             try:
                 llm_response = await self.llm_service.generate_analysis(
                     user_prompt=user_prompt,
-                    database_schema=schema
+                    database_schema=schema,
+                    generate_charts=generate_charts
                 )
                 logger.info(f"LLM generated query: {llm_response.sql_query[:100]}...")
                 logger.info(f"LLM generated {len(llm_response.chart_configs)} chart configs")
@@ -137,10 +140,7 @@ class AnalysisService:
                 if not query_results:
                     logger.warning("Query returned no results")
                     return {
-                        "explanation": (
-                            llm_response.explanation +
-                            "\n\nNota: La consulta no retornó ningún resultado."
-                        ),
+                        "explanation": "La consulta no retornó ningún resultado. Intenta reformular tu pregunta o verifica los filtros aplicados.",
                         "sql_query": sanitized_query,
                         "charts": []
                     }
@@ -150,6 +150,20 @@ class AnalysisService:
                 raise AnalysisError(
                     f"Error al ejecutar la consulta: {str(e)}"
                 ) from e
+
+            # Step 4.5: Generate explanation from actual results
+            logger.info("Step 4.5: Generating explanation from query results...")
+            try:
+                explanation = await self.llm_service.generate_explanation_from_results(
+                    user_prompt=user_prompt,
+                    sql_query=sanitized_query,
+                    query_results=query_results
+                )
+                logger.info("Explanation generated successfully")
+            except Exception as e:
+                logger.error(f"Failed to generate explanation: {e}")
+                # Fallback to a simple explanation
+                explanation = f"Se encontraron {len(query_results)} registros que responden a tu consulta."
 
             # Step 5: Generate charts
             logger.info("Step 5: Generating charts...")
@@ -192,7 +206,7 @@ class AnalysisService:
             )
 
             return {
-                "explanation": llm_response.explanation,
+                "explanation": explanation,
                 "sql_query": sanitized_query,
                 "charts": charts
             }
