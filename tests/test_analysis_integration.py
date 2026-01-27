@@ -13,10 +13,6 @@ from app.services.analysis_service import AnalysisService
 from app.models.llm_models import LLMMultiQueryResponse, QueryPlan
 
 
-# Headers to bypass IP whitelist in tests
-WHITELIST_HEADERS = {"X-Forwarded-For": "127.0.0.1"}
-
-
 @pytest.fixture
 def client():
     """Test client fixture."""
@@ -37,7 +33,7 @@ def test_health_endpoint(client):
 
 def test_root_endpoint(client):
     """Test the root endpoint."""
-    response = client.get("/", headers=WHITELIST_HEADERS)
+    response = client.get("/")
 
     assert response.status_code == 200
     data = response.json()
@@ -49,7 +45,7 @@ def test_root_endpoint(client):
 
 def test_api_info_endpoint(client):
     """Test the API info endpoint."""
-    response = client.get("/api/v1/", headers=WHITELIST_HEADERS)
+    response = client.get("/api/v1/")
 
     assert response.status_code == 200
     data = response.json()
@@ -81,8 +77,7 @@ async def test_analysis_endpoint_with_mocks(
         # Make request
         response = client.post(
             "/api/v1/analysis",
-            json={"prompt": "Cuales son los productos mas vendidos?"},
-            headers=WHITELIST_HEADERS
+            json={"prompt": "Cuales son los productos mas vendidos?"}
         )
 
         # Verify response
@@ -138,8 +133,7 @@ async def test_analysis_endpoint_single_query(
     try:
         response = client.post(
             "/api/v1/analysis",
-            json={"prompt": "Cual es el total de ventas?"},
-            headers=WHITELIST_HEADERS
+            json={"prompt": "Cual es el total de ventas?"}
         )
 
         assert response.status_code == 200
@@ -175,8 +169,7 @@ async def test_analysis_endpoint_with_max_queries(
             json={
                 "prompt": "Cuales son los productos mas vendidos?",
                 "max_queries": 3
-            },
-            headers=WHITELIST_HEADERS
+            }
         )
 
         assert response.status_code == 200
@@ -192,8 +185,7 @@ def test_analysis_endpoint_validation_error(client):
     # Prompt too short
     response = client.post(
         "/api/v1/analysis",
-        json={"prompt": "Hi"},
-        headers=WHITELIST_HEADERS
+        json={"prompt": "Hi"}
     )
 
     assert response.status_code == 422  # Validation error
@@ -203,8 +195,7 @@ def test_analysis_endpoint_missing_prompt(client):
     """Test analysis endpoint without prompt."""
     response = client.post(
         "/api/v1/analysis",
-        json={},
-        headers=WHITELIST_HEADERS
+        json={}
     )
 
     assert response.status_code == 422  # Validation error
@@ -215,8 +206,7 @@ def test_analysis_endpoint_invalid_max_queries(client):
     # max_queries too high
     response = client.post(
         "/api/v1/analysis",
-        json={"prompt": "Cuales son los productos mas vendidos?", "max_queries": 10},
-        headers=WHITELIST_HEADERS
+        json={"prompt": "Cuales son los productos mas vendidos?", "max_queries": 10}
     )
 
     assert response.status_code == 422  # Validation error
@@ -224,8 +214,7 @@ def test_analysis_endpoint_invalid_max_queries(client):
     # max_queries too low
     response = client.post(
         "/api/v1/analysis",
-        json={"prompt": "Cuales son los productos mas vendidos?", "max_queries": 0},
-        headers=WHITELIST_HEADERS
+        json={"prompt": "Cuales son los productos mas vendidos?", "max_queries": 0}
     )
 
     assert response.status_code == 422  # Validation error
@@ -236,8 +225,7 @@ async def test_validate_endpoint(client):
     """Test the prompt validation endpoint."""
     response = client.post(
         "/api/v1/validate",
-        json={"prompt": "Cuales son las ventas totales?"},
-        headers=WHITELIST_HEADERS
+        json={"prompt": "Cuales son las ventas totales?"}
     )
 
     assert response.status_code == 200
@@ -261,7 +249,7 @@ def test_database_info_endpoint_with_mock(
     app.dependency_overrides[get_analysis_service] = lambda: mock_analysis_service
 
     try:
-        response = client.get("/api/v1/database/info", headers=WHITELIST_HEADERS)
+        response = client.get("/api/v1/database/info")
 
         assert response.status_code == 200
         data = response.json()
@@ -278,8 +266,7 @@ def test_detailed_health_check(client):
     """Test detailed health check endpoint."""
     response = client.post(
         "/api/v1/health/detailed",
-        json={"include_services": False},
-        headers=WHITELIST_HEADERS
+        json={"include_services": False}
     )
 
     assert response.status_code == 200

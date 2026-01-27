@@ -4,7 +4,7 @@ Loads configuration from environment variables with type validation.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List, Literal, Optional
+from typing import Literal
 
 
 class Settings(BaseSettings):
@@ -24,7 +24,6 @@ class Settings(BaseSettings):
     app_name: str = "Analyst Bot Service"
     app_version: str = "1.0.0"
     environment: str = "development"
-    allowed_ips: str = "127.0.0.1"
 
     # Database Configuration
     db_server: str
@@ -47,18 +46,6 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     max_query_rows: int = 10000
     query_timeout_seconds: int = 30
-
-    @property
-    def allowed_ips_list(self) -> List[str]:
-        """
-        Parse comma-separated IPs into a list.
-        Supports individual IPs and CIDR notation.
-
-        Examples:
-            - "127.0.0.1" -> ["127.0.0.1"]
-            - "192.168.1.1,10.0.0.0/24" -> ["192.168.1.1", "10.0.0.0/24"]
-        """
-        return [ip.strip() for ip in self.allowed_ips.split(",") if ip.strip()]
 
     @property
     def is_azure_sql(self) -> bool:

@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.core.security import IPWhitelistMiddleware
 from app.api.routes import analysis
 
 # Configure logging
@@ -31,7 +30,6 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"Database: {settings.db_server}/{settings.db_name}")
-    logger.info(f"IP Whitelist: {settings.allowed_ips_list}")
 
     yield
 
@@ -59,12 +57,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
-)
-
-# Add IP whitelist middleware
-app.add_middleware(
-    IPWhitelistMiddleware,
-    allowed_ips=settings.allowed_ips_list
 )
 
 # Include routers
