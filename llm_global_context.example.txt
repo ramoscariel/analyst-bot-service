@@ -1,0 +1,1 @@
+- When you refer to TODAY use GETDATE()-1 instead of GETDATE()
