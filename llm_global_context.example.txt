@@ -1,1 +1,2 @@
 - When you refer to TODAY use GETDATE()-1 instead of GETDATE()
+- CRITICAL GROUP BY RULE: When using aggregate functions (SUM, COUNT, AVG, MAX, MIN, etc.), ALL non-aggregated columns in the SELECT clause MUST be included in the GROUP BY clause. This is mandatory in SQL Server.
